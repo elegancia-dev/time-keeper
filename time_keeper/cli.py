@@ -146,5 +146,40 @@ def projects():
     conn.close()
 
 
+@cli.command("db-status")
+def db_status():
+    """Show database file size and row counts."""
+    conn = store.get_db()
+    size = store.db_size_mb()
+    session_count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+    activity_count = conn.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0]
+    click.echo(f"Database: {store.DB_PATH}")
+    click.echo(f"  Size:           {size:.2f} MB")
+    click.echo(f"  Sessions:       {session_count}")
+    click.echo(f"  Activity log:   {activity_count}")
+    warning = store.check_db_size()
+    if warning:
+        click.echo()
+        click.echo(warning)
+    conn.close()
+
+
+@cli.command("db-export")
+@click.option("--before", required=True, help="Export sessions before this date (YYYY-MM-DD)")
+def db_export(before):
+    """Export old sessions to JSON and clean up the database."""
+    conn = store.get_db()
+    result = store.export_and_clean(conn, before)
+    click.echo(result)
+    conn.close()
+
+
+@cli.command()
+def menubar():
+    """Launch the macOS menu bar app."""
+    from .menubar import run_menubar
+    run_menubar()
+
+
 if __name__ == "__main__":
     cli()

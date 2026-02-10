@@ -17,6 +17,9 @@ from . import store
 DEFAULT_IGNORE = [
     ".git/*", "__pycache__/*", "node_modules/*", "*.pyc",
     ".DS_Store", "*.swp", "*.swo", "*~",
+    ".next/*", "dist/*", "build/*", "target/*", ".turbo/*",
+    "coverage/*", ".pytest_cache/*", ".mypy_cache/*", ".ruff_cache/*",
+    "*.min.js", "*.map", ".sass-cache/*",
 ]
 
 
@@ -51,7 +54,6 @@ class WatchTracker:
         self.conn = store.get_db()
         self.session_id = None
         self.last_activity_ts = 0.0
-        self.paused = False
 
     def on_file_event(self, event):
         now = time.time()
@@ -61,13 +63,7 @@ class WatchTracker:
 
         if self.session_id is None:
             self.session_id = store.create_session(self.conn, self.repo_path, self.project_name)
-            self.paused = False
             print(f"  [{ts}] Session {self.session_id} auto-started")
-
-        if self.paused:
-            self.paused = False
-            store.log_activity(self.conn, self.session_id, "session_resume", "Resumed from idle")
-            print(f"  [{ts}] Session resumed from idle")
 
         src = os.path.realpath(event.src_path)
         repo = os.path.realpath(self.repo_path)
@@ -75,19 +71,21 @@ class WatchTracker:
         store.log_activity(self.conn, self.session_id, "file_" + event.event_type, rel_path)
 
     def check_idle(self):
-        if self.session_id is None or self.paused:
+        if self.session_id is None:
             return
         idle_seconds = time.time() - self.last_activity_ts
         if idle_seconds > self.idle_timeout_min * 60:
-            self.paused = True
-            store.log_activity(
-                self.conn, self.session_id, "session_pause",
-                f"Auto-paused after {self.idle_timeout_min}m idle",
-            )
+            store.stop_session(self.conn, self.session_id)
             ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-            print(f"  [{ts}] Session paused (idle for {self.idle_timeout_min}m)")
+            print(f"  [{ts}] Session {self.session_id} stopped (idle for {self.idle_timeout_min}m)")
+            self.session_id = None
 
     def run(self):
+        warning = store.check_db_size()
+        if warning:
+            print(warning)
+            print()
+
         print(f"Watching: {self.repo_path}")
         print(f"  Project: {self.project_name}")
         print(f"  Idle timeout: {self.idle_timeout_min} minutes")
