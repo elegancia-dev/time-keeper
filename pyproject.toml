@@ -1,0 +1,20 @@
+[project]
+name = "time-keeper"
+version = "0.1.0"
+description = "Track billable hours across repos with auto-detection, git summaries, and Claude conversation parsing"
+requires-python = ">=3.9"
+dependencies = [
+    "watchdog>=4.0",
+    "click>=8.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+tk = "time_keeper.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["time_keeper*"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
