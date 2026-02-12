@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Logger</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Work Logger</h1>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value" id="distraction-count">0</span>
+        <span class="stat-label">distractions today</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="log-count">0</span>
+        <span class="stat-label">work entries</span>
+      </div>
+    </div>
+
+    <h2>Recent Logs</h2>
+    <div id="recent-logs">
+      <p class="empty">No logs yet.</p>
+    </div>
+
+    <div class="links">
+      <a href="#" id="open-options">Settings</a>
+    </div>
+  </div>
+
+  <script src="storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

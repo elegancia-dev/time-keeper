@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Logger</title>
+  <link rel="stylesheet" href="intercept.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Log phase -->
+    <div id="log-phase">
+      <h1>What were you just working on?</h1>
+      <p class="subtitle">You were heading to <strong id="domain-name"></strong>. Log your work first.</p>
+
+      <form id="log-form">
+        <div class="field">
+          <label for="task">Task description</label>
+          <input type="text" id="task" placeholder="e.g. Implementing the auth flow" required autofocus>
+        </div>
+
+        <div class="field">
+          <label for="project">Project</label>
+          <div class="project-wrapper">
+            <select id="project-select">
+              <option value="">Select a project...</option>
+            </select>
+            <input type="text" id="project-custom" placeholder="Or type a new project name">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>About how long were you working?</label>
+          <div class="duration-options">
+            <button type="button" class="duration-btn" data-value="5m">5m</button>
+            <button type="button" class="duration-btn" data-value="15m">15m</button>
+            <button type="button" class="duration-btn selected" data-value="30m">30m</button>
+            <button type="button" class="duration-btn" data-value="1h">1h</button>
+            <button type="button" class="duration-btn" data-value="2h+">2h+</button>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">Log & Continue</button>
+      </form>
+    </div>
+
+    <!-- Cooldown phase -->
+    <div id="cooldown-phase" class="hidden">
+      <h1>Take a moment.</h1>
+      <p class="subtitle">Back to work in <strong id="countdown"></strong>s</p>
+      <div class="timer-bar">
+        <div id="timer-progress"></div>
+      </div>
+      <button id="back-to-work" class="secondary-btn">Go back to work</button>
+      <button id="continue-btn" class="submit-btn hidden">Continue to <span id="continue-domain"></span></button>
+    </div>
+  </div>
+
+  <script src="storage.js"></script>
+  <script src="intercept.js"></script>
+</body>
+</html>

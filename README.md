@@ -1,5 +1,7 @@
 # time-keeper
 
+## by: DJ Zevenbergen
+
 A billable hour tracker for contractors working across multiple repositories. It auto-detects work sessions by watching file changes, logs time to a local SQLite database, and generates reports enriched with git commit history and Claude Code conversation summaries.
 
 ## Quick Start
@@ -120,11 +122,11 @@ Open a live terminal dashboard with real-time session tracking. The dashboard re
 
 Keyboard shortcuts inside the dashboard:
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit the dashboard |
+| Key | Action                                            |
+| --- | ------------------------------------------------- |
+| `q` | Quit the dashboard                                |
 | `s` | Start a session for the current working directory |
-| `x` | Stop the most recent active session |
+| `x` | Stop the most recent active session               |
 
 ```bash
 tk dashboard
@@ -324,24 +326,24 @@ Claude conversations are read from `~/.claude/projects/`. The parser matches pro
 
 **sessions**
 
-| Column       | Type    | Description                              |
-|--------------|---------|------------------------------------------|
-| id           | INTEGER | Primary key, auto-increment              |
-| repo_path    | TEXT    | Absolute path to the repository          |
+| Column       | Type    | Description                               |
+| ------------ | ------- | ----------------------------------------- |
+| id           | INTEGER | Primary key, auto-increment               |
+| repo_path    | TEXT    | Absolute path to the repository           |
 | project_name | TEXT    | Project name (defaults to directory name) |
-| start_time   | TEXT    | ISO 8601 UTC timestamp                   |
-| end_time     | TEXT    | ISO 8601 UTC timestamp (NULL if active)  |
-| status       | TEXT    | `active` or `stopped`                    |
+| start_time   | TEXT    | ISO 8601 UTC timestamp                    |
+| end_time     | TEXT    | ISO 8601 UTC timestamp (NULL if active)   |
+| status       | TEXT    | `active` or `stopped`                     |
 
 **activity_log**
 
-| Column     | Type    | Description                                    |
-|------------|---------|------------------------------------------------|
-| id         | INTEGER | Primary key, auto-increment                    |
-| session_id | INTEGER | Foreign key to sessions.id                     |
-| timestamp  | TEXT    | ISO 8601 UTC timestamp                         |
+| Column     | Type    | Description                                                                                                                                             |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id         | INTEGER | Primary key, auto-increment                                                                                                                             |
+| session_id | INTEGER | Foreign key to sessions.id                                                                                                                              |
+| timestamp  | TEXT    | ISO 8601 UTC timestamp                                                                                                                                  |
 | event_type | TEXT    | Event type (e.g., `session_start`, `session_stop`, `session_pause`, `session_resume`, `file_modified`, `file_created`, `git_summary`, `claude_summary`) |
-| detail     | TEXT    | Optional detail (e.g., relative file path)     |
+| detail     | TEXT    | Optional detail (e.g., relative file path)                                                                                                              |
 
 ### Querying the Database Directly
 

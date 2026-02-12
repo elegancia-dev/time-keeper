@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Logger - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Work Logger Settings</h1>
+
+    <section>
+      <h2>Distraction Domains</h2>
+      <p class="hint">One domain per line. Subdomains are matched automatically.</p>
+      <textarea id="domains" rows="10" placeholder="instagram.com&#10;reddit.com&#10;youtube.com"></textarea>
+      <button id="save-domains" class="btn primary">Save domains</button>
+    </section>
+
+    <section>
+      <h2>Cooldown Duration</h2>
+      <div class="cooldown-row">
+        <input type="number" id="cooldown" min="0" max="300" value="30">
+        <span>seconds</span>
+      </div>
+      <button id="save-cooldown" class="btn primary">Save cooldown</button>
+    </section>
+
+    <section>
+      <h2>All Logs</h2>
+      <div id="all-logs">
+        <p class="empty">No logs yet.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Export</h2>
+      <div class="export-buttons">
+        <button id="export-btn" class="btn">Export logs as JSON</button>
+        <button id="export-clear-btn" class="btn danger">Export & clear logs</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="storage.js"></script>
+  <script src="export.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
