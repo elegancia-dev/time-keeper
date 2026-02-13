@@ -1,92 +1,112 @@
-const DEFAULT_DOMAINS = [
-  "instagram.com",
-  "reddit.com",
-  "twitter.com",
-  "x.com",
-  "facebook.com",
-  "tiktok.com",
-  "youtube.com",
-];
+/**
+ * Storage abstraction layer.
+ *
+ * Logs, projects, and settings are stored in SQLite via the native messaging host.
+ * The domain cache for fast interception stays in chrome.storage.local.
+ */
 
-const DEFAULT_COOLDOWN = 30;
+const HOST_NAME = "com.timekeeper.work_logger";
 
-async function getStorage(keys) {
-  return chrome.storage.local.get(keys);
+// --- Native messaging helpers ---
+
+function sendNativeMessage(message) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendNativeMessage(HOST_NAME, message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(response);
+        }
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
-async function setStorage(data) {
-  return chrome.storage.local.set(data);
+/**
+ * For pages that can't call sendNativeMessage directly (popup, options, intercept),
+ * relay through the background service worker.
+ */
+function sendViaBackground(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: "native", payload: message }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(response);
+      }
+    });
+  });
 }
 
-async function getDistractionDomains() {
-  const { distraction_domains } = await getStorage("distraction_domains");
-  return distraction_domains ?? DEFAULT_DOMAINS;
-}
-
-async function setDistractionDomains(domains) {
-  return setStorage({ distraction_domains: domains });
-}
-
-async function addDistractionDomain(domain) {
-  const domains = await getDistractionDomains();
-  const normalized = domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
-  if (!domains.includes(normalized)) {
-    domains.push(normalized);
-    await setDistractionDomains(domains);
-  }
-  return domains;
-}
-
-async function removeDistractionDomain(domain) {
-  const domains = await getDistractionDomains();
-  const filtered = domains.filter((d) => d !== domain);
-  await setDistractionDomains(filtered);
-  return filtered;
-}
-
-async function getCooldownSeconds() {
-  const { cooldown_seconds } = await getStorage("cooldown_seconds");
-  return cooldown_seconds ?? DEFAULT_COOLDOWN;
-}
-
-async function setCooldownSeconds(seconds) {
-  return setStorage({ cooldown_seconds: seconds });
-}
-
-async function getLogs() {
-  const { logs } = await getStorage("logs");
-  return logs ?? [];
-}
+// --- Log functions ---
 
 async function addLog(entry) {
-  const logs = await getLogs();
-  logs.unshift(entry);
-  await setStorage({ logs });
+  return sendViaBackground({
+    action: "add_log",
+    task: entry.task,
+    project: entry.project,
+    duration_estimate: entry.duration_estimate,
+    triggered_by: entry.triggered_by,
+    triggered_url: entry.triggered_url,
+  });
+}
 
-  // Update projects list
-  if (entry.project) {
-    const projects = await getProjects();
-    if (!projects.includes(entry.project)) {
-      projects.push(entry.project);
-      await setStorage({ projects });
-    }
-  }
-
-  return logs;
+async function getLogs(limit, since) {
+  const msg = { action: "get_logs" };
+  if (limit) msg.limit = limit;
+  if (since) msg.since = since;
+  const resp = await sendViaBackground(msg);
+  return resp?.logs ?? [];
 }
 
 async function clearLogs() {
-  return setStorage({ logs: [] });
+  // No longer supported — logs live in SQLite now and persist
+  return;
 }
+
+// --- Project functions ---
 
 async function getProjects() {
-  const { projects } = await getStorage("projects");
-  return projects ?? [];
+  const resp = await sendViaBackground({ action: "get_projects" });
+  return resp?.projects ?? [];
 }
 
-function generateId() {
-  return crypto.randomUUID();
+// --- Settings functions ---
+
+async function getSettings() {
+  const resp = await sendViaBackground({ action: "get_settings" });
+  return resp ?? { domains: [], cooldown_seconds: 30 };
 }
+
+async function saveSettings(settings) {
+  return sendViaBackground({ action: "save_settings", ...settings });
+}
+
+async function getDistractionDomains() {
+  const settings = await getSettings();
+  return settings.domains;
+}
+
+async function getCooldownSeconds() {
+  const settings = await getSettings();
+  return settings.cooldown_seconds;
+}
+
+// --- Domain cache in chrome.storage.local (for fast background interception) ---
+
+async function getCachedDomains() {
+  const { cached_domains } = await chrome.storage.local.get("cached_domains");
+  return cached_domains ?? null;
+}
+
+async function setCachedDomains(domains) {
+  return chrome.storage.local.set({ cached_domains: domains });
+}
+
+// --- URL utility functions ---
 
 function isDistractionUrl(url, domains) {
   try {
@@ -111,4 +131,8 @@ function getTodayLogs(logs) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return logs.filter((log) => new Date(log.timestamp) >= today);
+}
+
+function generateId() {
+  return crypto.randomUUID();
 }

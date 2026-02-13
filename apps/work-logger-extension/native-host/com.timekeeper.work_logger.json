@@ -1,0 +1,7 @@
+{
+  "name": "com.timekeeper.work_logger",
+  "description": "Work Logger native messaging host for time-keeper",
+  "path": "/Users/davidzevenbergen/repos/tools/time-keeper/apps/work-logger-extension/native-host/work_logger_host.py",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://UPDATE_WITH_YOUR_EXTENSION_ID/"]
+}

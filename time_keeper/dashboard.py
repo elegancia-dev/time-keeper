@@ -115,7 +115,7 @@ def make_activity_panel(conn, limit: int = 15) -> Panel:
     rows = conn.execute(
         """SELECT a.timestamp, a.event_type, a.detail, s.project_name
            FROM activity_log a
-           JOIN sessions s ON a.session_id = s.id
+           LEFT JOIN sessions s ON a.session_id = s.id
            ORDER BY a.timestamp DESC LIMIT ?""",
         (limit,),
     ).fetchall()
@@ -137,14 +137,27 @@ def make_activity_panel(conn, limit: int = 15) -> Panel:
         "session_resume": "green",
         "file_created": "cyan",
         "file_modified": "blue",
+        "work_log": "bold magenta",
     }
 
     for r in rows:
         ts = r["timestamp"][11:19] if len(r["timestamp"]) > 19 else r["timestamp"][-8:]
         event = r["event_type"]
         style = event_styles.get(event, "")
-        detail = (r["detail"] or "")[:50]
-        detail_text = f"{r['project_name']}: {detail}" if detail else r["project_name"]
+        project_name = r["project_name"]
+        detail_raw = r["detail"] or ""
+        # For standalone entries (no session), extract project from JSON detail
+        if not project_name and detail_raw:
+            try:
+                import json
+                data = json.loads(detail_raw)
+                project_name = data.get("project") or data.get("task", "")[:30] or "standalone"
+                # Use task as detail for work_log entries
+                detail_raw = data.get("task", detail_raw)
+            except (json.JSONDecodeError, TypeError):
+                project_name = "standalone"
+        detail = detail_raw[:50]
+        detail_text = f"{project_name}: {detail}" if detail else (project_name or "—")
         table.add_row(ts, Text(event, style=style), detail_text)
 
     return Panel(table, title=f"Activity Feed (last {limit})", border_style="yellow")

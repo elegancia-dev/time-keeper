@@ -1,5 +1,5 @@
 (async () => {
-  const logs = await getLogs();
+  const logs = await getLogs(50);
   const todayLogs = getTodayLogs(logs);
 
   // Stats
@@ -25,7 +25,7 @@
       '<div class="log-meta">' +
         "<span>" + time + "</span>" +
         (log.project ? "<span>" + escapeHtml(log.project) + "</span>" : "") +
-        '<span class="log-trigger">' + escapeHtml(log.triggered_by) + "</span>" +
+        '<span class="log-trigger">' + escapeHtml(log.triggered_by || "") + "</span>" +
       "</div>";
     container.appendChild(div);
   });

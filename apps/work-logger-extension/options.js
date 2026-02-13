@@ -1,10 +1,8 @@
 // Load current settings
 (async () => {
-  const domains = await getDistractionDomains();
-  document.getElementById("domains").value = domains.join("\n");
-
-  const cooldown = await getCooldownSeconds();
-  document.getElementById("cooldown").value = cooldown;
+  const settings = await getSettings();
+  document.getElementById("domains").value = (settings.domains || []).join("\n");
+  document.getElementById("cooldown").value = settings.cooldown_seconds || 30;
 
   await renderLogs();
 })();
@@ -16,16 +14,13 @@ document.getElementById("save-domains").addEventListener("click", async () => {
     .split("\n")
     .map((d) => {
       let clean = d.trim().toLowerCase();
-      // Strip protocol
       clean = clean.replace(/^https?:\/\//, "");
-      // Strip www prefix
       clean = clean.replace(/^www\./, "");
-      // Strip path, query, hash, trailing slash
       clean = clean.split(/[/?#]/)[0];
       return clean;
     })
     .filter((d) => d.length > 0);
-  await setDistractionDomains(domains);
+  await saveSettings({ domains });
   showToast("Domains saved");
 });
 
@@ -33,24 +28,12 @@ document.getElementById("save-domains").addEventListener("click", async () => {
 document.getElementById("save-cooldown").addEventListener("click", async () => {
   const value = parseInt(document.getElementById("cooldown").value, 10);
   if (isNaN(value) || value < 0) return;
-  await setCooldownSeconds(value);
+  await saveSettings({ cooldown_seconds: value });
   showToast("Cooldown saved");
 });
 
-// Export
-document.getElementById("export-btn").addEventListener("click", async () => {
-  await exportAndDownload();
-  showToast("Logs exported");
-});
-
-document.getElementById("export-clear-btn").addEventListener("click", async () => {
-  await exportAndClear();
-  showToast("Logs exported and cleared");
-  await renderLogs();
-});
-
 async function renderLogs() {
-  const logs = await getLogs();
+  const logs = await getLogs(100);
   const container = document.getElementById("all-logs");
 
   if (logs.length === 0) {
@@ -64,12 +47,12 @@ async function renderLogs() {
     const div = document.createElement("div");
     div.className = "log-entry";
     div.innerHTML =
-      '<div class="log-task">' + escapeHtml(log.task) + "</div>" +
+      '<div class="log-task">' + escapeHtml(log.task || "") + "</div>" +
       '<div class="log-meta">' +
         "<span>" + time + "</span>" +
         (log.project ? "<span>" + escapeHtml(log.project) + "</span>" : "") +
         (log.duration_estimate ? "<span>" + escapeHtml(log.duration_estimate) + "</span>" : "") +
-        '<span class="log-trigger">' + escapeHtml(log.triggered_by) + "</span>" +
+        '<span class="log-trigger">' + escapeHtml(log.triggered_by || "") + "</span>" +
       "</div>";
     container.appendChild(div);
   });

@@ -7,19 +7,19 @@ const allowedTabs = new Set();
 let cachedDomains = null;
 
 async function loadDomains() {
-  cachedDomains = await getDistractionDomains();
+  try {
+    const resp = await sendNativeMessage({ action: "get_settings" });
+    cachedDomains = resp.domains;
+    await setCachedDomains(cachedDomains);
+  } catch (e) {
+    // Fall back to local cache if native host isn't available
+    cachedDomains = await getCachedDomains();
+  }
   return cachedDomains;
 }
 
 // Load domains on startup
 loadDomains();
-
-// Reload cache whenever storage changes
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.distraction_domains) {
-    cachedDomains = changes.distraction_domains.newValue;
-  }
-});
 
 // Monitor tab navigations — use onBeforeNavigate for earliest interception
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
@@ -39,6 +39,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 
   // Use cached domains to avoid async delay; fall back to storage read
   const domains = cachedDomains ?? (await loadDomains());
+  if (!domains) return;
 
   if (isDistractionUrl(details.url, domains)) {
     const domain = extractDomain(details.url);
@@ -52,11 +53,28 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   }
 });
 
-// Handle "allow-once" messages from intercept page
+// Handle messages from extension pages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "allow-once" && sender.tab) {
     allowedTabs.add(sender.tab.id);
     sendResponse({ ok: true });
+    return false;
+  }
+
+  // Relay native messaging calls from extension pages
+  if (message.type === "native" && message.payload) {
+    (async () => {
+      try {
+        const response = await sendNativeMessage(message.payload);
+        if (message.payload.action === "save_settings") {
+          loadDomains();
+        }
+        sendResponse(response);
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
+    })();
+    return true; // keep sendResponse channel open for async
   }
 });
 
@@ -73,15 +91,25 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "add-distraction" && tab?.url) {
     const domain = extractDomain(tab.url);
     if (domain) {
-      await addDistractionDomain(domain);
-      chrome.action.setBadgeText({ text: "+", tabId: tab.id });
-      chrome.action.setBadgeBackgroundColor({
-        color: "#4CAF50",
-        tabId: tab.id,
-      });
-      setTimeout(() => {
-        chrome.action.setBadgeText({ text: "", tabId: tab.id });
-      }, 2000);
+      try {
+        const settings = await sendNativeMessage({ action: "get_settings" });
+        const domains = settings.domains || [];
+        if (!domains.includes(domain)) {
+          domains.push(domain);
+          await sendNativeMessage({ action: "save_settings", domains });
+          await loadDomains();
+        }
+        chrome.action.setBadgeText({ text: "+", tabId: tab.id });
+        chrome.action.setBadgeBackgroundColor({
+          color: "#4CAF50",
+          tabId: tab.id,
+        });
+        setTimeout(() => {
+          chrome.action.setBadgeText({ text: "", tabId: tab.id });
+        }, 2000);
+      } catch (e) {
+        console.error("Failed to add domain:", e);
+      }
     }
   }
 });

@@ -24,14 +24,42 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
+    session_id INTEGER,
     timestamp TEXT NOT NULL,
     event_type TEXT NOT NULL,
     detail TEXT,
+    source TEXT,
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 """
-# hi
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Run schema migrations for existing databases."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(activity_log)").fetchall()}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE activity_log ADD COLUMN source TEXT")
+        conn.commit()
+
+    # Check if session_id is nullable — recreate table if NOT NULL constraint exists
+    for row in conn.execute("PRAGMA table_info(activity_log)").fetchall():
+        if row[1] == "session_id" and row[3] == 1:  # notnull == 1
+            conn.executescript("""
+                CREATE TABLE activity_log_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    detail TEXT,
+                    source TEXT,
+                    FOREIGN KEY (session_id) REFERENCES sessions(id)
+                );
+                INSERT INTO activity_log_new (id, session_id, timestamp, event_type, detail, source)
+                    SELECT id, session_id, timestamp, event_type, detail, source FROM activity_log;
+                DROP TABLE activity_log;
+                ALTER TABLE activity_log_new RENAME TO activity_log;
+            """)
+            break
 
 
 def get_db(db_path: Path | None = None) -> sqlite3.Connection:
@@ -40,6 +68,7 @@ def get_db(db_path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
 
 
@@ -243,3 +272,51 @@ def export_and_clean(
         f"Exported {len(sessions)} sessions and {len(activities)} activity records "
         f"to {export_path}\nDatabase vacuumed."
     )
+
+
+def log_standalone_activity(
+    conn: sqlite3.Connection,
+    event_type: str,
+    detail: str | None = None,
+    source: str | None = None,
+    timestamp: str | None = None,
+) -> int:
+    """Insert an activity with session_id=NULL (not tied to a watcher session)."""
+    cur = conn.execute(
+        "INSERT INTO activity_log (session_id, timestamp, event_type, detail, source) VALUES (NULL, ?, ?, ?, ?)",
+        (timestamp or now_iso(), event_type, detail, source),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_activities_by_source(
+    conn: sqlite3.Connection,
+    source: str,
+    since: str | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    """Query activities filtered by source."""
+    conditions = ["source = ?"]
+    params: list = [source]
+    if since:
+        conditions.append("timestamp >= ?")
+        params.append(since)
+    where = " AND ".join(conditions)
+    query = f"SELECT * FROM activity_log WHERE {where} ORDER BY timestamp DESC"
+    if limit:
+        query += f" LIMIT {int(limit)}"
+    rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_projects_list(conn: sqlite3.Connection) -> list[str]:
+    """Distinct project names from both sessions and standalone activity logs."""
+    rows = conn.execute("""
+        SELECT DISTINCT project_name AS name FROM sessions
+        UNION
+        SELECT DISTINCT json_extract(detail, '$.project') AS name
+            FROM activity_log WHERE source IS NOT NULL AND json_valid(detail) AND json_extract(detail, '$.project') IS NOT NULL
+        ORDER BY name
+    """).fetchall()
+    return [r["name"] for r in rows if r["name"]]

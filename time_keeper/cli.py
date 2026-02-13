@@ -175,6 +175,38 @@ def db_export(before):
 
 
 @cli.command()
+def ingest():
+    """Ingest JSON files from ~/.time-keeper/inbox/ into the database."""
+    from .ingest import ingest_all
+    conn = store.get_db()
+    result = ingest_all(conn)
+    click.echo(result)
+    conn.close()
+
+
+@cli.command()
+@click.option("--since", help="Start date (YYYY-MM-DD)")
+@click.option("--today", is_flag=True, default=True, help="Today only (default)")
+@click.option("--week", is_flag=True, help="Past 7 days")
+def recap(since, today, week):
+    """Work recap: hours summary + full context for copy-pasting."""
+    now = datetime.now(timezone.utc)
+    if week:
+        since_dt = now - timedelta(days=7)
+        period_label = "Past 7 days"
+    elif since:
+        since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        period_label = f"Since {since}"
+    else:
+        since_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        period_label = "Today"
+
+    conn = store.get_db()
+    click.echo(reports.format_recap(conn, since_dt, period_label))
+    conn.close()
+
+
+@cli.command()
 def menubar():
     """Launch the macOS menu bar app."""
     from .menubar import run_menubar

@@ -40,8 +40,6 @@ document.getElementById("log-form").addEventListener("submit", async (e) => {
   const project = projectCustom || projectSelect;
 
   const entry = {
-    id: generateId(),
-    timestamp: new Date().toISOString(),
     task,
     project: project || null,
     duration_estimate: selectedDuration,
