@@ -2,13 +2,34 @@
 name = "time-keeper"
 version = "0.1.0"
 description = "Track billable hours across repos with auto-detection, git summaries, and Claude conversation parsing"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.9"
+authors = [
+    { name = "DJ Zevenbergen" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+    "Topic :: Software Development :: Build Tools",
+]
 dependencies = [
     "watchdog>=4.0",
     "click>=8.0",
     "rich>=13.0",
     "rumps>=0.4.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/djzevenbergen/time-keeper"
+Repository = "https://github.com/djzevenbergen/time-keeper"
+Issues = "https://github.com/djzevenbergen/time-keeper/issues"
 
 [project.scripts]
 tk = "time_keeper.cli:cli"

@@ -1,8 +1,24 @@
 # time-keeper
 
-## by: DJ Zevenbergen
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 
 A billable hour tracker for contractors working across multiple repositories. It auto-detects work sessions by watching file changes, logs time to a local SQLite database, and generates reports enriched with git commit history and Claude Code conversation summaries.
+
+## Why time-keeper?
+
+If you're a contractor juggling multiple repos, tracking billable hours is tedious. Most time trackers require you to remember to start and stop timers manually. time-keeper watches your file system instead — start `tk watch` when you sit down to work and it handles the rest. Sessions auto-start, auto-pause on idle, and auto-resume when you come back. At the end of the week, `tk summary --week` gives you a clean breakdown by project.
+
+## Features
+
+- **Auto-detection** — watches file changes and tracks sessions automatically
+- **Idle handling** — pauses after inactivity, resumes when you return
+- **Git enrichment** — reports include commit history for each session
+- **Claude integration** — detailed reports pull in Claude Code conversation summaries
+- **Live dashboard** — terminal UI with real-time session tracking
+- **macOS menu bar** — start/stop sessions from the menu bar
+- **Local-first** — all data in a single SQLite file, no network, no accounts, no telemetry
+- **JSON inbox** — ingest time data from external sources (e.g., browser extensions)
 
 ## Quick Start
 
@@ -134,153 +150,23 @@ tk dashboard
 
 ## Architecture
 
-time-keeper is built as a three-phase monorepo:
-
 ```
 time-keeper/
-  apps/           # Phase 1: Independent single-purpose scripts
-  combos/         # Phase 2: Compositions of Phase 1 apps
-  time_keeper/    # Phase 3: Final CLI tool (installed as `tk`)
+  examples/apps/     # Standalone single-purpose scripts (prototypes)
+  examples/combos/   # Compositions of the standalone apps (prototypes)
+  time_keeper/       # Final CLI tool (installed as `tk`)
 ```
 
-**Phase 1 -- Independent Apps** (`apps/`): Six standalone scripts that each do one thing. They have no dependencies on each other and can be used individually with `python main.py`.
+The `time_keeper/` package is the installable Python package with a Click-based CLI. This is what `pip install -e .` installs as the `tk` command.
 
-**Phase 2 -- Combos** (`combos/`): Two scripts that compose Phase 1 apps together using `importlib` to load them directly. They wire up callbacks and data flow between apps.
+## Examples
 
-**Phase 3 -- Final Tool** (`time_keeper/`): The installable Python package that refactors everything into a clean module structure with a Click-based CLI. This is what `pip install -e .` installs as the `tk` command.
+The `examples/` directory contains the prototypes that time-keeper was built from:
 
-## Phase 1 Apps
+- **`examples/apps/`** — Six standalone scripts that each do one thing (file watching, SQLite storage, git summarization, session timing, Claude conversation parsing, report generation). Each can be run independently with `python main.py --help`.
+- **`examples/combos/`** — Two scripts that compose the standalone apps into higher-level workflows (active session tracking, work summarization).
 
-Each app is a standalone script in `apps/`. Run any of them with `python main.py --help` for usage.
-
-### file-watcher
-
-Watches a directory for file system changes and prints timestamped events. Filters out noise like `.git/`, `__pycache__/`, `node_modules/`, swap files, and `.DS_Store`.
-
-```bash
-cd apps/file-watcher
-python main.py                             # Watch current directory
-python main.py /path/to/repo               # Watch a specific path
-python main.py . --ignore "*.log" "dist/*" # Add custom ignore patterns
-```
-
-Output:
-
-```
-Watching /Users/you/repos/project for changes... (Ctrl+C to stop)
-2026-02-09T14:30:12 MODIFIED /Users/you/repos/project/src/main.py
-2026-02-09T14:30:15 CREATED /Users/you/repos/project/src/utils.py
-```
-
-Default ignore patterns: `.git/*`, `__pycache__/*`, `node_modules/*`, `*.pyc`, `.DS_Store`, `*.swp`, `*.swo`, `*~`
-
-### sqlite-store
-
-CRUD interface for sessions and activity logs in the SQLite database.
-
-```bash
-cd apps/sqlite-store
-python main.py create-session /path/to/repo                # Auto-names project from dir
-python main.py create-session /path/to/repo --project "x"  # Custom project name
-python main.py stop-session 1                              # Stop session by ID
-python main.py list-sessions                               # List all sessions
-python main.py list-sessions --status active               # Filter by status
-python main.py show-session 1                              # Show session with activity log
-python main.py log-activity 1 file_modified "src/main.py"  # Log an event
-```
-
-### git-summarizer
-
-Extracts and formats git commit history for a repository and time range. Output is markdown.
-
-```bash
-cd apps/git-summarizer
-python main.py                             # All commits in current repo
-python main.py /path/to/repo               # Specific repo
-python main.py . --today                   # Today's commits
-python main.py . --week                    # Past 7 days
-python main.py . --since 2026-02-01       # From a date
-python main.py . --since 2026-02-01 --until 2026-02-07
-```
-
-### session-timer
-
-A lightweight session timer with idle timeout, pause, and resume. Stores state in a JSON file (no database dependency).
-
-```bash
-cd apps/session-timer
-python main.py start                        # Start timing (current directory)
-python main.py start --repo /path/to/repo   # Start for a specific repo
-python main.py start --idle-timeout 10      # Custom idle timeout (default: 15 min)
-python main.py status                       # Show elapsed time and idle state
-python main.py touch                        # Record activity (resets idle timer, resumes if paused)
-python main.py stop                         # Stop and show total duration
-```
-
-State is stored at `~/.time-keeper/session-timer-state.json`. The timer auto-pauses when the idle timeout is exceeded (checked on `status`). Use `touch` to signal activity and resume a paused session.
-
-### claude-parser
-
-Parses Claude Code conversation history from `~/.claude/projects/` and extracts summaries including topics, message counts, tools used, and files touched.
-
-```bash
-cd apps/claude-parser
-python main.py                                          # Summarize all sessions across all projects
-python main.py --project-dir /path/to/repo              # Filter to sessions for a specific project
-python main.py --list                                   # List sessions (compact format)
-python main.py --list --project-dir /path/to/repo       # List sessions for a project
-python main.py --session SESSION_ID                     # Parse a specific session by ID
-python main.py --since 2026-02-01                       # Filter by date range
-python main.py --since 2026-02-01 --until 2026-02-07
-```
-
-### report-generator
-
-Generates summary and detailed reports from the time-keeper database. Requires that sessions already exist in the database (created by sqlite-store or the `tk` CLI).
-
-```bash
-cd apps/report-generator
-python main.py summary                    # Summary grouped by project
-python main.py summary --today            # Today only
-python main.py summary --week             # Past 7 days
-python main.py summary --project "x"      # Filter by project
-python main.py detail                     # Detailed per-session breakdown
-python main.py detail --week              # Detailed report for the past week
-python main.py detail --since 2026-02-01 --until 2026-02-07
-```
-
-## Phase 2 Combos
-
-Combos compose Phase 1 apps into higher-level workflows.
-
-### active-tracker
-
-Combines **file-watcher** + **session-timer** + **sqlite-store**. Watches a repo for file changes, auto-starts a database session on first activity, auto-pauses on idle, resumes on new activity, and stops cleanly on Ctrl+C.
-
-```bash
-cd combos/active-tracker
-python main.py                              # Watch current directory
-python main.py /path/to/repo                # Watch a specific repo
-python main.py . --idle-timeout 10          # Custom idle timeout (default: 15 min)
-python main.py . --project "client-api"     # Custom project name
-```
-
-This is the direct precursor to `tk watch`.
-
-### work-summarizer
-
-Combines **git-summarizer** + **claude-parser** + **sqlite-store**. Takes existing sessions from the database and enriches them with git commit history and Claude conversation summaries.
-
-```bash
-cd combos/work-summarizer
-python main.py                              # Summarize all sessions
-python main.py --session 3                  # Summarize a specific session
-python main.py --today                      # Today's sessions
-python main.py --week                       # Past 7 days
-python main.py --since 2026-02-01 --until 2026-02-07
-```
-
-This is the precursor to `tk detail`.
+These are useful as reference implementations and for understanding how the pieces fit together. See the README files in each subdirectory for usage details.
 
 ## Configuration
 
@@ -313,8 +199,6 @@ The file watcher ignores these patterns by default:
 - `*.pyc`
 - `.DS_Store`
 - `*.swp`, `*.swo`, `*~`
-
-The standalone file-watcher app supports adding custom patterns with `--ignore`. The `tk watch` command uses the built-in defaults.
 
 ### Claude Conversation Parsing
 
@@ -363,3 +247,24 @@ GROUP BY project_name;
 -- Recent activity
 SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT 20;
 ```
+
+## Privacy
+
+time-keeper is local-first by design:
+
+- All data stays in `~/.time-keeper/` on your machine
+- No network requests, no telemetry, no external accounts
+- SQLite database you can query, export, or delete at any time
+- Git and Claude data are read on demand, never copied into the database
+
+## Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md) for planned improvements and future directions.
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

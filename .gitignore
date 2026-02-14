@@ -25,3 +25,5 @@ env/
 
 # time-keeper local data
 *.db
+*.db-journal
+.time-keeper/
