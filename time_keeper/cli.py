@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 import click
 
-from . import store, reports
-from .watcher import WatchTracker
+from . import store, reports, config
+from .watcher import MultiWatcher
 
 
 def date_range_options(f):
@@ -94,13 +94,86 @@ def status():
 
 
 @cli.command()
-@click.option("--repo", default=".", help="Repository path to watch (default: current directory)")
+@click.option("--repo", default=None, help="Watch a single repo one-off (ignores the registry)")
 @click.option("--idle-timeout", type=int, default=15, help="Idle timeout in minutes (default: 15)")
-@click.option("--project", help="Project name (defaults to repo directory name)")
+@click.option("--project", help="Project name for --repo (defaults to repo directory name)")
 def watch(repo, idle_timeout, project):
-    """Start file watcher daemon — auto-tracks sessions based on file changes."""
-    tracker = WatchTracker(repo, idle_timeout, project)
-    tracker.run()
+    """Auto-track sessions by watching file changes.
+
+    With no --repo, watches every repo registered via `tk repos add`.
+    """
+    if repo:
+        repo_path = os.path.abspath(repo)
+        repos = [{"path": repo_path, "project": project or os.path.basename(repo_path)}]
+    else:
+        repos = config.list_repos()
+        if not repos:
+            click.echo("No repos registered. Add one with: tk repos add <path>")
+            click.echo("Or watch a single repo one-off with: tk watch --repo <path>")
+            return
+
+    MultiWatcher(repos, idle_timeout).run()
+
+
+@cli.group()
+def repos():
+    """Manage the set of repos the watcher tracks."""
+    pass
+
+
+@repos.command("add")
+@click.argument("path", default=".")
+@click.option("--project", help="Project name (defaults to directory name)")
+def repos_add(path, project):
+    """Register a repo to be watched by `tk watch`."""
+    ok, msg = config.add_repo(path, project)
+    click.echo(msg)
+
+
+@repos.command("remove")
+@click.argument("path", default=".")
+def repos_remove(path):
+    """Unregister a repo."""
+    ok, msg = config.remove_repo(path)
+    click.echo(msg)
+
+
+@repos.command("list")
+def repos_list():
+    """List registered repos."""
+    registered = config.list_repos()
+    if not registered:
+        click.echo("No repos registered. Add one with: tk repos add <path>")
+        return
+    for r in registered:
+        click.echo(f"  {r['project']:30s}  {r['path']}")
+
+
+@cli.group()
+def service():
+    """Manage the launchd agent that auto-starts the watcher at login (macOS)."""
+    pass
+
+
+@service.command("install")
+def service_install():
+    """Install and start the login agent."""
+    from . import service as svc
+    click.echo(svc.install())
+
+
+@service.command("uninstall")
+def service_uninstall():
+    """Stop and remove the login agent."""
+    from . import service as svc
+    click.echo(svc.uninstall())
+
+
+@service.command("status")
+def service_status():
+    """Show whether the login agent is installed and running."""
+    from . import service as svc
+    click.echo(svc.status())
 
 
 @cli.command()

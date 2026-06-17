@@ -12,12 +12,15 @@ If you're a contractor juggling multiple repos, tracking billable hours is tedio
 ## Features
 
 - **Auto-detection** — watches file changes and tracks sessions automatically
+- **Multi-repo** — watch all your registered repos at once from a single process
+- **Set and forget** — a macOS login agent starts the watcher automatically, so you never forget to turn it on
 - **Idle handling** — pauses after inactivity, resumes when you return
 - **Git enrichment** — reports include commit history for each session
 - **Claude integration** — detailed reports pull in Claude Code conversation summaries
 - **Live dashboard** — terminal UI with real-time session tracking
 - **macOS menu bar** — start/stop sessions from the menu bar
 - **Local-first** — all data in a single SQLite file, no network, no accounts, no telemetry
+- **Efficient** — WAL-mode SQLite with batched writes and monthly log rotation; safe to leave running indefinitely
 - **JSON inbox** — ingest time data from external sources (e.g., browser extensions)
 
 ## Quick Start
@@ -31,10 +34,22 @@ pip install -e .
 # add that directory to PATH or use the module directly:
 python3 -m time_keeper.cli
 
-# Start watching the current repo for file changes (auto-tracks sessions)
-tk watch
+# --- Recommended: set-and-forget setup ---
 
-# Or manually start/stop sessions
+# 1. Register the repos you want tracked (run once per repo)
+tk repos add ~/work/client-api
+tk repos add ~/work/dashboard --project dash
+
+# 2. Auto-start the watcher at login (macOS); tracks all registered repos
+tk service install
+
+# That's it. Sessions now start/stop automatically as you work.
+
+# --- Or run the watcher manually ---
+tk watch                      # Watch all registered repos in the foreground
+tk watch --repo .             # Watch a single repo one-off (ignores the registry)
+
+# Manual session control (without the watcher)
 tk start
 tk stop
 
@@ -82,16 +97,43 @@ tk status
 
 ### `tk watch`
 
-Start a file watcher daemon that auto-starts and auto-pauses sessions based on file activity. This is the primary way to use time-keeper -- start it when you begin work and let it handle the rest.
+Start a file watcher that auto-starts and auto-pauses sessions based on file activity. This is the primary way to use time-keeper -- start it when you begin work and let it handle the rest.
 
 ```bash
-tk watch                                  # Watch current directory, 15m idle timeout
-tk watch --repo /path/to/repo             # Watch a specific repo
+tk watch                                  # Watch every registered repo (see `tk repos`)
+tk watch --repo /path/to/repo             # Watch a single repo one-off (ignores the registry)
 tk watch --idle-timeout 10                # Pause after 10 minutes of inactivity
-tk watch --project "client-api"           # Custom project name
+tk watch --project "client-api"           # Custom project name (with --repo)
 ```
 
-The watcher auto-starts a session on the first file change, pauses when idle, resumes when activity returns, and cleanly stops the session on Ctrl+C.
+With no `--repo`, the watcher tracks **all repos in your registry** in a single process, each with its own session. Add repos with `tk repos add` (below). The watcher auto-starts a session on the first file change in a repo, pauses it when idle, resumes when activity returns, and cleanly stops every session on Ctrl+C or `SIGTERM`.
+
+File events are buffered and written to the database in batches (one transaction per second of activity, none while idle), so leaving the watcher running long-term is cheap.
+
+### `tk repos`
+
+Manage the set of repos that `tk watch` tracks.
+
+```bash
+tk repos add /path/to/repo                # Register a repo (project name = dir name)
+tk repos add . --project "client-api"     # Register the current dir with a custom name
+tk repos remove /path/to/repo             # Unregister a repo
+tk repos list                             # Show registered repos
+```
+
+The registry lives in `~/.time-keeper/config.json`.
+
+### `tk service` (macOS)
+
+Run the watcher automatically at login via a launchd agent, so you never forget to turn it on.
+
+```bash
+tk service install                        # Install + start the login agent (runs `tk watch`)
+tk service status                         # Check whether it's installed and running
+tk service uninstall                      # Stop and remove the agent
+```
+
+The agent tracks your registered repos and restarts itself if it crashes (but not on a clean exit, so an empty registry won't loop). Logs go to `~/.time-keeper/logs/watch.log`, which is rotated monthly — at each new month the previous month is gzipped into `~/.time-keeper/logs/archive/watch-YYYY-MM.log.gz` and a fresh log is started, so it never grows without bound. The typical setup is: `tk repos add` your repos once, then `tk service install` and forget about it.
 
 ### `tk summary`
 
@@ -116,6 +158,21 @@ tk detail --week
 tk detail --project "client-api"
 tk detail --since 2026-02-01 --until 2026-02-07
 ```
+
+### `tk recap`
+
+Generate a work recap with hours summary and full context (sessions, git commits, file changes, work log entries, Claude conversations). Designed to be copy-pasted into an AI chat for narrative summarization.
+
+```bash
+tk recap                          # Today (default)
+tk recap --today                  # Same as above
+tk recap --week                   # Past 7 days
+tk recap --since 2026-02-01       # From a specific date
+```
+
+The output has two sections:
+1. **Hours summary** — per-day, per-project breakdown with totals
+2. **Raw context** — sessions grouped by date, git commits, file changes (excluding temp files), Chrome extension work log entries, and Claude Code conversation topics (deduplicated)
 
 ### `tk projects`
 
@@ -170,15 +227,21 @@ These are useful as reference implementations and for understanding how the piec
 
 ## Configuration
 
-### Database Location
+### Files and Locations
 
-All data is stored in a single SQLite file:
+Everything lives under `~/.time-keeper/` (created automatically on first use):
 
 ```
-~/.time-keeper/timekeeper.db
+~/.time-keeper/
+  timekeeper.db            # all session + activity data (SQLite, WAL mode)
+  config.json              # registry of repos watched by `tk watch`
+  logs/watch.log           # current watcher log (rotated monthly)
+  logs/archive/            # gzipped logs from previous months
+  inbox/                   # JSON files picked up by `tk ingest`
+  exports/                 # JSON written by `tk db-export`
 ```
 
-The directory is created automatically on first use.
+The SQLite database uses WAL mode, so the watcher, dashboard, and menu bar can read and write concurrently without locking each other out.
 
 ### Idle Timeout
 

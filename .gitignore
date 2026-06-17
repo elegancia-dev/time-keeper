@@ -26,4 +26,9 @@ env/
 # time-keeper local data
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 .time-keeper/
+
+# Internal notes (not for repo)
+doc/

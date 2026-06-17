@@ -67,6 +67,13 @@ def get_db(db_path: Path | None = None) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # WAL lets readers (dashboard, menubar) and writers (watchers) coexist
+    # without "database is locked"; NORMAL sync is durable under WAL and far
+    # cheaper than the default FULL fsync-per-commit; busy_timeout backstops
+    # the rare concurrent-writer collision across processes.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(SCHEMA)
     _migrate(conn)
     return conn
@@ -160,6 +167,26 @@ def log_activity(
     )
     conn.commit()
     return cur.lastrowid
+
+
+def log_activities_batch(
+    conn: sqlite3.Connection,
+    rows: list[tuple[int, str, str, str | None]],
+) -> int:
+    """Insert many activity rows in a single transaction.
+
+    Each row is (session_id, timestamp, event_type, detail). Returns the
+    number of rows written. Used by the watcher to flush buffered file
+    events without an fsync per event.
+    """
+    if not rows:
+        return 0
+    conn.executemany(
+        "INSERT INTO activity_log (session_id, timestamp, event_type, detail) VALUES (?, ?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+    return len(rows)
 
 
 def query_sessions(
